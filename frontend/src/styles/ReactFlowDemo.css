@@ -1,0 +1,24 @@
+.demo-container {
+    display: flex;
+  }
+  
+  .left-panel {
+    width: 30%;
+    padding: 10px;
+  }
+  
+  .uml-textarea {
+    width: 100%;
+    height: 80vh;
+  }
+  
+  .switch-button {
+    margin-top: 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  
+  .flow-container {
+    flex-grow: 1;
+    border: 1px solid #ccc;
+  }  

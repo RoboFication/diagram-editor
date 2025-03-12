@@ -1,5 +1,0 @@
-@startuml
-rectangle A1
-rectangle A2
-A2 --> A1
-@enduml

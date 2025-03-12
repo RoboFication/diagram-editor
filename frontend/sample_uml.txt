@@ -1,0 +1,70 @@
+@startuml
+' Start of the diagram
+start
+
+' --- Initialization ---
+partition "Initialization" {
+  :Load Configurations;
+  :Load Whisper Model;
+  :Retrieve Device Indices;
+
+  if (Devices Found?) then (Yes)
+    :Display Device Details;
+  else (No)
+    :Log Error;
+    stop;
+  endif
+}
+
+' --- Recording Setup ---
+partition "Recording Setup" {
+  fork
+    :Start Stereo Mix Recording;
+  fork again
+    :Start Microphone Recording;
+  end fork
+}
+
+' --- Processing Audio ---
+partition "Processing Audio" {
+  :Start Transcription Thread;
+
+  if (Audio Buffers Available?) then (Yes)
+    :Combine Buffers;
+    :Process Audio Data;
+    :Perform Transcription;
+    -> (Check again);
+  else (No)
+    :Wait for Audio Data;
+    -> (Check again);
+  endif
+  ' The diagram shows these two branches merging back
+  ' into the same decision loop for repeated checks.
+}
+
+' --- Stop Recording ---
+partition "Stop Recording" {
+  :Wait for User Input;
+  :Set Stop Recording Signal;
+
+  fork
+    :Stop Stereo Mix Recording;
+  fork again
+    :Stop Microphone Recording;
+  fork again
+    :Stop Transcription Thread;
+  end fork
+}
+
+' --- Post-Processing ---
+partition "Post-Processing" {
+  :Clean Buffers;
+  :Generate File Names;
+  :Save Individual Recordings;
+  :Merge Recordings;
+  :Save Merged File;
+}
+
+' End of the diagram
+stop
+@enduml

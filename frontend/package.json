@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "plantuml-reactflow",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -10,7 +10,9 @@
     "jointjs": "^3.7.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.3.0",
     "react-scripts": "5.0.1",
+    "reactflow": "^11.11.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
