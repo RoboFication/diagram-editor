@@ -104,7 +104,7 @@ stop
       el: containerRef.current,
       model: graphRef.current,
       width: 1000,
-      height: 10000,
+      height: 2000,
       gridSize: 10,
       drawGrid: true,
       restrictTranslate: true,

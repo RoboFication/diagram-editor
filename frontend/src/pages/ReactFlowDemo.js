@@ -6,6 +6,7 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
 } from "reactflow";
+import DiamondNode from "../nodes/DiamondNode";
 import "reactflow/dist/style.css";
 import "../styles/ReactFlowDemo.css";
 
@@ -104,6 +105,7 @@ stop
   useEffect(() => {
     const { nodes, edges } = parsePlantUML(umlText);
     let currentY = 50;
+    let rfNodeType = ""
     const newRfNodes = nodes.map((node) => {
       // Define default styles; customize per node type
       let nodeStyle = {
@@ -115,6 +117,7 @@ stop
         width: 120,
         textAlign: "center",
       };
+      
       if (node.type === "start" || node.type === "stop") {
         nodeStyle.width = 60;
         nodeStyle.height = 60;
@@ -123,14 +126,29 @@ stop
         nodeStyle.alignItems = "center";
         nodeStyle.justifyContent = "center";
         nodeStyle.backgroundColor = "#90ee90"; // light green
+
+        rfNodeType = "default";
       } else if (node.type === "diamond") {
-        nodeStyle.backgroundColor = "#ffd54f"; // light amber
+        // Update the style for a diamond shape:
+        nodeStyle = {
+          ...nodeStyle,
+          width: 100,
+          height: 100,
+          backgroundColor: "transparent", // remove yellow from container
+          border: "none",                 // no outer border
+        };
+        // Also, set the node type so React Flow uses your custom node:
+        rfNodeType = "diamond";
+      } else {
+        rfNodeType = "default";
       }
+
       const rfNode = {
         id: node.id,
         data: { label: node.label },
         position: { x: 50, y: currentY },
         style: nodeStyle,
+        type: rfNodeType,
       };
       currentY += 100;
       return rfNode;
@@ -157,6 +175,29 @@ stop
     setRfEdges((eds) => applyEdgeChanges(changes, eds));
   };
 
+  useEffect(() => {
+    const errorHandler = (e) => {
+      if (
+        e.message.includes(
+          "ResizeObserver loop completed with undelivered notifications" ||
+            "ResizeObserver loop limit exceeded"
+        )
+      ) {
+        const resizeObserverErr = document.getElementById(
+          "webpack-dev-server-client-overlay"
+        );
+        if (resizeObserverErr) {
+          resizeObserverErr.style.display = "none";
+        }
+      }
+    };
+    window.addEventListener("error", errorHandler);
+  
+    return () => {
+      window.removeEventListener("error", errorHandler);
+    };
+  }, []);
+
   return (
     <div className="demo-container">
       <div className="left-panel">
@@ -175,18 +216,19 @@ stop
       </div>
 
       <div className="flow-container">
-        <ReactFlow
-          nodes={rfNodes}
-          edges={rfEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          fitView
-          style={{ width: "100%", height: "80vh" }}
-        >
-          <MiniMap />
-          <Controls />
-          <Background />
-        </ReactFlow>
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={{ diamond: DiamondNode }} // register custom diamond node
+        fitView
+        style={{ width: "100%", height: "80vh" }}
+      >
+        <MiniMap />
+        <Controls />
+        <Background />
+      </ReactFlow>
       </div>
     </div>
   );
