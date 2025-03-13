@@ -10,83 +10,7 @@ import DiamondNode from "../nodes/DiamondNode";
 import "reactflow/dist/style.css";
 import "../styles/ReactFlowDemo.css";
 
-function parsePlantUML(umlText) {
-  const lines = umlText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => !!l);
-
-  let nodes = [];
-  let edges = [];
-  let previousNodeId = null;
-  let nodeCount = 0;
-
-  function createNode(label, type = "rectangle") {
-    const id = `node_${nodeCount++}`;
-    nodes.push({ id, label, type });
-    return id;
-  }
-
-  function linkNodes(from, to, label = "") {
-    edges.push({ source: from, target: to, label });
-  }
-
-  lines.forEach((line) => {
-    if (line.startsWith("partition ")) {
-      const match = line.match(/partition\s+"([^"]+)"/);
-      if (match) {
-        const nodeId = createNode(`Partition: ${match[1]}`, "group");
-        previousNodeId = nodeId;
-      }
-      return;
-    }
-    if (line === "start") {
-      const nodeId = createNode("Start", "start");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line === "stop") {
-      const nodeId = createNode("Stop", "stop");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith(":") && line.endsWith(";")) {
-      const activity = line.slice(1, -1).trim();
-      const nodeId = createNode(activity, "rectangle");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("if")) {
-      const nodeId = createNode(line, "diamond");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("else")) {
-      const nodeId = createNode(line, "diamond");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("fork")) {
-      const nodeId = createNode("Fork", "fork");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("end fork")) {
-      const nodeId = createNode("End Fork", "fork");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-  });
-
-  return { nodes, edges };
-}
+import parsePlantUML from "../parsing/parseActivityDiagrams";
 
 export default function ReactFlowDemo() {
   const [umlText, setUmlText] = useState(`@startuml
@@ -104,8 +28,9 @@ stop
   // Parse UML text and set nodes/edges only when umlText changes
   useEffect(() => {
     const { nodes, edges } = parsePlantUML(umlText);
-    let currentY = 50;
-    let rfNodeType = ""
+
+    // Map the parsed nodes into React Flow nodes.
+    // We use the computed positions from parsePlantUML rather than a fixed vertical spacing.
     const newRfNodes = nodes.map((node) => {
       // Define default styles; customize per node type
       let nodeStyle = {
@@ -117,17 +42,30 @@ stop
         width: 120,
         textAlign: "center",
       };
-      
-      if (node.type === "start" || node.type === "stop") {
+
+      let rfNodeType = "default";
+
+      // Color the start node green, stop node red, partition node blue, if node yellow, etc.
+      if (node.type === "start") {
         nodeStyle.width = 60;
         nodeStyle.height = 60;
         nodeStyle.borderRadius = "50%";
         nodeStyle.display = "flex";
         nodeStyle.alignItems = "center";
         nodeStyle.justifyContent = "center";
-        nodeStyle.backgroundColor = "#90ee90"; // light green
-
-        rfNodeType = "default";
+        nodeStyle.backgroundColor = "green"; // Start node
+      } else if (node.type === "stop") {
+        nodeStyle.width = 60;
+        nodeStyle.height = 60;
+        nodeStyle.borderRadius = "50%";
+        nodeStyle.display = "flex";
+        nodeStyle.alignItems = "center";
+        nodeStyle.justifyContent = "center";
+        nodeStyle.backgroundColor = "red"; // Stop node
+      } else if (node.type === "group") {
+        nodeStyle.backgroundColor = "#add8e6"; // Partition node in light-blue
+      } else if (node.type === "fork") {
+        nodeStyle.backgroundColor = "#f0f0f0"; // Light gray for Fork node
       } else if (node.type === "diamond") {
         // Update the style for a diamond shape:
         nodeStyle = {
@@ -137,23 +75,20 @@ stop
           backgroundColor: "transparent", // remove yellow from container
           border: "none",                 // no outer border
         };
-        // Also, set the node type so React Flow uses your custom node:
         rfNodeType = "diamond";
-      } else {
-        rfNodeType = "default";
       }
 
-      const rfNode = {
+      // Use the position computed in parsePlantUML.
+      return {
         id: node.id,
         data: { label: node.label },
-        position: { x: 50, y: currentY },
+        position: node.position,
         style: nodeStyle,
         type: rfNodeType,
       };
-      currentY += 100;
-      return rfNode;
     });
 
+    // Create React Flow edges from our parsed edges.
     const newRfEdges = edges.map((edge, index) => ({
       id: `e-${edge.source}-${edge.target}-${index}`,
       source: edge.source,
@@ -192,7 +127,7 @@ stop
       }
     };
     window.addEventListener("error", errorHandler);
-  
+
     return () => {
       window.removeEventListener("error", errorHandler);
     };
@@ -216,19 +151,19 @@ stop
       </div>
 
       <div className="flow-container">
-      <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={{ diamond: DiamondNode }} // register custom diamond node
-        fitView
-        style={{ width: "100%", height: "80vh" }}
-      >
-        <MiniMap />
-        <Controls />
-        <Background />
-      </ReactFlow>
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={{ diamond: DiamondNode }} // register custom diamond node
+          fitView
+          style={{ width: "100%", height: "80vh" }}
+        >
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
       </div>
     </div>
   );
