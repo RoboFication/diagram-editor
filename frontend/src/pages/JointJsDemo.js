@@ -1,87 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import * as joint from "jointjs"; // Ensure jointjs is installed
+import * as joint from "jointjs";
 import "../styles/JointJsDemo.css";
-
-function parsePlantUML(umlText) {
-  const lines = umlText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => !!l);
-
-  let nodes = [];
-  let edges = [];
-  let previousNodeId = null;
-  let nodeCount = 0;
-
-  function createNode(label, type = "rectangle") {
-    const id = `node_${nodeCount++}`;
-    nodes.push({ id, label, type });
-    return id;
-  }
-
-  function linkNodes(from, to, label = "") {
-    edges.push({ source: from, target: to, label });
-  }
-
-  lines.forEach((line) => {
-    if (line.startsWith("partition ")) {
-    // partition "XYZ"
-      const match = line.match(/partition\s+"([^"]+)"/);
-      if (match) {
-        const nodeId = createNode(`Partition: ${match[1]}`, "group");
-        previousNodeId = nodeId;
-      }
-      return;
-    }
-    if (line === "start") {
-      const nodeId = createNode("Start", "start");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line === "stop") {
-      const nodeId = createNode("Stop", "stop");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith(":") && line.endsWith(";")) {
-      // :Load Configurations;
-      const activity = line.slice(1, -1).trim();
-      const nodeId = createNode(activity, "rectangle");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("if")) {
-      // if (condition) then ...
-      const nodeId = createNode(line, "diamond");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("else")) {
-      const nodeId = createNode(line, "diamond");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("fork")) {
-      const nodeId = createNode("Fork", "fork");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-    if (line.startsWith("end fork")) {
-      const nodeId = createNode("End Fork", "fork");
-      if (previousNodeId) linkNodes(previousNodeId, nodeId);
-      previousNodeId = nodeId;
-      return;
-    }
-  });
-
-  return { nodes, edges };
-}
+// Import the updated parser logic from parseActivityDiagrams.js
+import parsePlantUML from "../parsing/parseActivityDiagrams";
 
 export default function JointjsDemo() {
   const [umlText, setUmlText] = useState(`@startuml
@@ -95,68 +16,104 @@ stop
   const graphRef = useRef(null);
   const paperRef = useRef(null);
 
-  // Initialize JointJS graph and paper on first render
+  // Initialize the JointJS graph and paper once
   useEffect(() => {
     graphRef.current = new joint.dia.Graph();
 
-    // Create the Paper (the view), telling it which DOM element to mount into
+    // Create the Paper (the view)
+    // We set initial dimensions; these will be updated dynamically after rendering nodes.
     paperRef.current = new joint.dia.Paper({
       el: containerRef.current,
       model: graphRef.current,
       width: 1000,
-      height: 2000,
+      height: 400,
       gridSize: 10,
       drawGrid: true,
       restrictTranslate: true,
     });
   }, []);
 
-  // Each time umlText changes, we parse and re‐build the diagram
+  // Update the diagram when umlText changes
   useEffect(() => {
-    if (!graphRef.current) return;
+    if (!graphRef.current || !paperRef.current) return;
+
+    // Use the new parser that returns nodes with computed positions and improved edge labels.
     const { nodes, edges } = parsePlantUML(umlText);
-    
-    // Clear the existing graph
+
+    // Clear the graph for re-rendering
     graphRef.current.clear();
 
-    // place each node at x=50 and an incrementing y
-    let currentY = 50;
+    // Map to hold JointJS element references by node id.
     const jointNodesMap = {};
 
-    // Create JointJS elements for each node
+    // Iterate over parsed nodes to create JointJS elements.
     nodes.forEach((node) => {
       let shape;
-      // Basic shape selection by 'type'
-      if (node.type === "start" || node.type === "stop") {
-        shape = new joint.shapes.standard.Circle();
-        shape.attr("label/text", node.label);
-        shape.resize(80, 80);
-      } else if (node.type === "diamond") {
-        shape = new joint.shapes.standard.Polygon();
-        shape.attr("label/text", node.label);
-        shape.attr("body/refPoints", "0,10 10,0 20,10 10,20");
-        shape.resize(100, 80);
-      } else {
-        shape = new joint.shapes.standard.Rectangle();
-        shape.attr("label/text", node.label);
-        shape.resize(160, 60);
-      }
-      shape.position(50, currentY);
-      currentY += 100;
-      shape.addTo(graphRef.current);
 
-      // Keep track in a map so we can link them
+      // Use the computed positions from the parser
+      const { x, y } = node.position;
+
+      // Determine the shape and style based on node type.
+      if (node.type === "start" || node.type === "stop") {
+        // Create a circle for start/stop nodes.
+        shape = new joint.shapes.standard.Circle();
+        shape.resize(60, 60);
+        shape.position(x, y);
+        shape.attr("label/text", node.label);
+        // Color coding for start (green) and stop (red)
+        shape.attr("body/fill", node.type === "start" ? "green" : "red");
+      } else if (node.type === "diamond") {
+        // Create a diamond shape using a polygon.
+        shape = new joint.shapes.standard.Polygon();
+        // Define points to form a diamond shape.
+        shape.attr("body/refPoints", "50,0 100,50 50,100 0,50");
+        shape.resize(100, 100);
+        shape.position(x, y);
+        shape.attr("label/text", node.label);
+        // For diamond nodes, we use transparent background and no border
+        shape.attr("body/fill", "transparent");
+        shape.attr("body/stroke", "#222");
+      } else if (node.type === "group") {
+        // Partition (group) node with light blue background.
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.position(x, y);
+        shape.attr("label/text", node.label);
+        shape.attr("body/fill", "#add8e6");
+        shape.attr("body/stroke", "#222");
+      } else if (node.type === "fork") {
+        // Fork node with a light gray background.
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.position(x, y);
+        shape.attr("label/text", node.label);
+        shape.attr("body/fill", "#f0f0f0");
+        shape.attr("body/stroke", "#222");
+      } else {
+        // Default rectangle node.
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.position(x, y);
+        shape.attr("label/text", node.label);
+        shape.attr("body/fill", "#fff");
+        shape.attr("body/stroke", "#222");
+      }
+
+      // Add the shape to the graph.
+      shape.addTo(graphRef.current);
+      // Keep track of the node by its id.
       jointNodesMap[node.id] = shape;
     });
 
-    // Create JointJS links for each edge
-    edges.forEach((edge) => {
+    // Create links (edges) between nodes.
+    edges.forEach((edge, index) => {
       const link = new joint.shapes.standard.Link();
       link.source(jointNodesMap[edge.source]);
       link.target(jointNodesMap[edge.target]);
       link.attr({
         line: {
           strokeWidth: 2,
+          stroke: "#555",
           targetMarker: {
             type: "path",
             d: "M 10 -5 0 0 10 5 z",
@@ -164,6 +121,7 @@ stop
           },
         },
       });
+      // Add edge label if present.
       if (edge.label) {
         link.appendLabel({
           attrs: {
@@ -175,6 +133,24 @@ stop
       }
       link.addTo(graphRef.current);
     });
+
+    // ---- Dynamic Paper Sizing ----
+    // Compute the required paper dimensions based on the positions and sizes of all nodes.
+    const allPositions = nodes.map((node) => {
+      // Assume default sizes based on node type. Adjust if needed.
+      let width = 160, height = 60;
+      if (node.type === "start" || node.type === "stop") {
+        width = height = 60;
+      } else if (node.type === "diamond") {
+        width = height = 100;
+      }
+      return { x: node.position.x + width, y: node.position.y + height };
+    });
+    const maxX = Math.max(...allPositions.map((p) => p.x), 1000) + 100; // Add some padding
+    const maxY = Math.max(...allPositions.map((p) => p.y), 800) + 100;  // Add some padding
+
+    // Update the paper dimensions to accommodate all nodes.
+    paperRef.current.setDimensions(maxX, maxY);
   }, [umlText]);
 
   return (
@@ -193,6 +169,10 @@ stop
           Switch to React Flow Demo
         </button>
       </div>
+      {/* 
+          The diagram-container is styled via CSS to allow scrolling if the diagram exceeds the view. 
+          You can ensure .diagram-container has styles like 'overflow: auto' in JointJsDemo.css.
+      */}
       <div className="diagram-container" ref={containerRef}></div>
     </div>
   );
