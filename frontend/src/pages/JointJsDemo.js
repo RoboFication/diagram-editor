@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as joint from "jointjs";
 import "../styles/JointJsDemo.css";
-// Import the updated parser logic from parseActivityDiagrams.js
 import parsePlantUML from "../parsing/parseActivityDiagrams";
 
 export default function JointjsDemo() {
+  const FIXED_WIDTH = 1000;    // Keep this width fixed
+  const MIN_HEIGHT = 600;      // Minimum height
+  const TOP_LEFT_MARGIN = 50;  // Margin from the top-left edge
+
   const [umlText, setUmlText] = useState(`@startuml
 start
 :Load Configurations;
@@ -12,77 +15,104 @@ start
 stop
 @enduml
 `);
+
   const containerRef = useRef(null);
   const graphRef = useRef(null);
   const paperRef = useRef(null);
 
-  // Initialize the JointJS graph and paper once
   useEffect(() => {
     graphRef.current = new joint.dia.Graph();
 
-    // Create the Paper (the view)
-    // We set initial dimensions; these will be updated dynamically after rendering nodes.
     paperRef.current = new joint.dia.Paper({
       el: containerRef.current,
       model: graphRef.current,
-      width: 1000,
-      height: 400,
+      width: FIXED_WIDTH,
+      height: MIN_HEIGHT,
       gridSize: 10,
       drawGrid: true,
       restrictTranslate: true,
     });
   }, []);
 
-  // Update the diagram when umlText changes
   useEffect(() => {
     if (!graphRef.current || !paperRef.current) return;
 
-    // Use the new parser that returns nodes with computed positions and improved edge labels.
+    // Parse the UML text using the advanced parser
     const { nodes, edges } = parsePlantUML(umlText);
 
-    // Clear the graph for re-rendering
+    // Clear any existing diagram
     graphRef.current.clear();
 
-    // Map to hold JointJS element references by node id.
-    const jointNodesMap = {};
+    // Helper to determine default node dimensions
+    const nodeDimensions = (node) => {
+      if (node.type === "start" || node.type === "stop") {
+        return { w: 60, h: 60 };
+      } else if (node.type === "diamond") {
+        return { w: 100, h: 100 };
+      }
+      // default rectangle
+      return { w: 160, h: 60 };
+    };
 
-    // Iterate over parsed nodes to create JointJS elements.
+    // 1. Find the bounding box of the diagram (minX, minY, maxX, maxY)
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+
     nodes.forEach((node) => {
+      const { x, y } = node.position;
+      const { w, h } = nodeDimensions(node);
+
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+
+      const rightEdge = x + w;
+      const bottomEdge = y + h;
+      if (rightEdge > maxX) maxX = rightEdge;
+      if (bottomEdge > maxY) maxY = bottomEdge;
+    });
+
+    // 2. Shift the diagram so minX >= TOP_LEFT_MARGIN and minY >= TOP_LEFT_MARGIN
+    const offsetX = minX < TOP_LEFT_MARGIN ? TOP_LEFT_MARGIN - minX : 0;
+    const offsetY = minY < TOP_LEFT_MARGIN ? TOP_LEFT_MARGIN - minY : 0;
+
+    if (offsetX !== 0 || offsetY !== 0) {
+      nodes.forEach((node) => {
+        node.position.x += offsetX;
+        node.position.y += offsetY;
+      });
+      // Update maxX/maxY after shifting
+      maxX += offsetX;
+      maxY += offsetY;
+    }
+
+    // 3. Create JointJS elements for each node
+    const jointNodesMap = {};
+    nodes.forEach((node) => {
+      const { x, y } = node.position;
       let shape;
 
-      // Use the computed positions from the parser
-      const { x, y } = node.position;
-
-      // Determine the shape and style based on node type.
       if (node.type === "start" || node.type === "stop") {
-        // Create a circle for start/stop nodes.
         shape = new joint.shapes.standard.Circle();
         shape.resize(60, 60);
         shape.position(x, y);
         shape.attr("label/text", node.label);
-        // Color coding for start (green) and stop (red)
-        shape.attr("body/fill", node.type === "start" ? "green" : "red");
+        shape.attr("body/fill", node.type === "start" ? "#1bed88" : "red");
       } else if (node.type === "diamond") {
-        // Create a diamond shape using a polygon.
         shape = new joint.shapes.standard.Polygon();
-        // Define points to form a diamond shape.
         shape.attr("body/refPoints", "50,0 100,50 50,100 0,50");
         shape.resize(100, 100);
         shape.position(x, y);
         shape.attr("label/text", node.label);
-        // For diamond nodes, we use transparent background and no border
-        shape.attr("body/fill", "transparent");
+        shape.attr("body/fill", "#ffd54f");
         shape.attr("body/stroke", "#222");
       } else if (node.type === "group") {
-        // Partition (group) node with light blue background.
         shape = new joint.shapes.standard.Rectangle();
         shape.resize(160, 60);
         shape.position(x, y);
         shape.attr("label/text", node.label);
-        shape.attr("body/fill", "#add8e6");
+        shape.attr("body/fill", "#56c1ff");
         shape.attr("body/stroke", "#222");
       } else if (node.type === "fork") {
-        // Fork node with a light gray background.
         shape = new joint.shapes.standard.Rectangle();
         shape.resize(160, 60);
         shape.position(x, y);
@@ -90,7 +120,6 @@ stop
         shape.attr("body/fill", "#f0f0f0");
         shape.attr("body/stroke", "#222");
       } else {
-        // Default rectangle node.
         shape = new joint.shapes.standard.Rectangle();
         shape.resize(160, 60);
         shape.position(x, y);
@@ -99,14 +128,12 @@ stop
         shape.attr("body/stroke", "#222");
       }
 
-      // Add the shape to the graph.
       shape.addTo(graphRef.current);
-      // Keep track of the node by its id.
       jointNodesMap[node.id] = shape;
     });
 
-    // Create links (edges) between nodes.
-    edges.forEach((edge, index) => {
+    // 4. Create links for each edge
+    edges.forEach((edge) => {
       const link = new joint.shapes.standard.Link();
       link.source(jointNodesMap[edge.source]);
       link.target(jointNodesMap[edge.target]);
@@ -121,7 +148,6 @@ stop
           },
         },
       });
-      // Add edge label if present.
       if (edge.label) {
         link.appendLabel({
           attrs: {
@@ -134,23 +160,13 @@ stop
       link.addTo(graphRef.current);
     });
 
-    // ---- Dynamic Paper Sizing ----
-    // Compute the required paper dimensions based on the positions and sizes of all nodes.
-    const allPositions = nodes.map((node) => {
-      // Assume default sizes based on node type. Adjust if needed.
-      let width = 160, height = 60;
-      if (node.type === "start" || node.type === "stop") {
-        width = height = 60;
-      } else if (node.type === "diamond") {
-        width = height = 100;
-      }
-      return { x: node.position.x + width, y: node.position.y + height };
-    });
-    const maxX = Math.max(...allPositions.map((p) => p.x), 1000) + 100; // Add some padding
-    const maxY = Math.max(...allPositions.map((p) => p.y), 800) + 100;  // Add some padding
+    // 5. Keep the paper width fixed; only adjust the height to fit the diagram.
+    //    Add extra padding for the bottom (e.g. +100).
+    const newHeight = Math.max(maxY + 100, MIN_HEIGHT);
+    paperRef.current.setDimensions(FIXED_WIDTH, newHeight);
 
-    // Update the paper dimensions to accommodate all nodes.
-    paperRef.current.setDimensions(maxX, maxY);
+    // If the content extends beyond 1000px to the right, the container
+    // can scroll horizontally (due to .diagram-container { overflow: auto }).
   }, [umlText]);
 
   return (
@@ -169,9 +185,23 @@ stop
           Switch to React Flow Demo
         </button>
       </div>
+
       {/* 
-          The diagram-container is styled via CSS to allow scrolling if the diagram exceeds the view. 
-          You can ensure .diagram-container has styles like 'overflow: auto' in JointJsDemo.css.
+        .diagram-container can use flex to center the diagram horizontally,
+        but the paper has a fixed width. If the container is narrower than 1000px,
+        a horizontal scrollbar will appear. If it's wider, the paper is simply centered.
+
+        Example CSS in JointJsDemo.css:
+
+        .diagram-container {
+          display: flex;
+          justify-content: center; 
+          overflow: auto;
+          border: 1px solid #ccc; 
+          min-height: 600px; 
+          width: 100%;
+          box-sizing: border-box;
+        }
       */}
       <div className="diagram-container" ref={containerRef}></div>
     </div>
