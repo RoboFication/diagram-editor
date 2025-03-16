@@ -23,6 +23,47 @@ stop
   const graphRef = useRef(null);
   const paperRef = useRef(null);
 
+  function addInteractivePorts(shape) {
+    // 1) Add ports (four sides). We can tweak the sides/IDs as needed.
+    shape.addPorts([
+      { id: "port-top", group: "top" },
+      { id: "port-right", group: "right" },
+      { id: "port-bottom", group: "bottom" },
+      { id: "port-left", group: "left" },
+    ]);
+  
+    // 2) Define port groups with consistent styling.
+    //    `magnet: true` means the user can drag a link from/to these ports.
+    //    `opacity: 0` initially hides them until mouse hover.
+    shape.prop("ports/groups", {
+      top: {
+        position: { name: "top" },
+        attrs: {
+          circle: { r: 6, magnet: true, stroke: "#31d0c6", fill: "#fff", strokeWidth: 2, opacity: 0, },
+        },
+      },
+      right: {
+        position: { name: "right" },
+        attrs: {
+          circle: { r: 6, magnet: true, stroke: "#31d0c6", fill: "#fff", strokeWidth: 2, opacity: 0,},
+        },
+      },
+      bottom: {
+        position: { name: "bottom" },
+        attrs: {
+          circle: { r: 6, magnet: true, stroke: "#31d0c6", fill: "#fff", strokeWidth: 2, opacity: 0,},
+        },
+      },
+      left: {
+        position: { name: "left" },
+        attrs: {
+          circle: { r: 6, magnet: true, stroke: "#31d0c6", fill: "#fff", strokeWidth: 2, opacity: 0,},
+        },
+      },
+    });
+  }
+  
+
   // Initialize the main graph/paper once
   useEffect(() => {
     graphRef.current = new joint.dia.Graph();
@@ -112,6 +153,7 @@ stop
             fontSize: 14
           }
         });
+        addInteractivePorts(shape);
       } else if (node.type === "diamond") {
         // Polygon (diamond) shape
         shape = new joint.shapes.standard.Polygon();
@@ -130,6 +172,7 @@ stop
             fontSize: 14
           }
         });
+        addInteractivePorts(shape);
       } else if (node.type === "group") {
         // Partition (group) node
         shape = new joint.shapes.standard.Rectangle();
@@ -149,6 +192,7 @@ stop
             fontSize: 14
           }
         });
+        addInteractivePorts(shape);
       } else if (node.type === "fork") {
         // Fork node
         shape = new joint.shapes.standard.Rectangle();
@@ -168,6 +212,7 @@ stop
             fontSize: 14
           }
         });
+        addInteractivePorts(shape);
       } else {
         // Default rectangle node
         shape = new joint.shapes.standard.Rectangle();
@@ -187,6 +232,8 @@ stop
             fontSize: 14
           }
         });
+        // add the interacitive handles (ports) to the nodes
+        addInteractivePorts(shape);
       }
 
       shape.addTo(graphRef.current);
@@ -244,6 +291,78 @@ stop
     }
   }, [zoom]);
 
+  // Addj g a cotext menu for right-click actions
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    cell: null,
+  });
+
+  // Listen for right-click events on cells
+  useEffect(() => {
+    if (paperRef.current) {
+      // Listen for right-click (context menu) events on any cell.
+      paperRef.current.on('cell:contextmenu', (cellView, evt, x, y) => {
+        evt.preventDefault(); // Prevent the browser’s default context menu.
+        setContextMenu({
+          visible: true,
+          x, // x coordinate relative to the container
+          y, // y coordinate relative to the container
+          cell: cellView.model, // store the target cell model
+        });
+      });
+    }
+  }, [paperRef.current]);
+
+  // Hide context menu when clicking outside
+  useEffect(() => {
+    const hideContextMenu = () => {
+      if (contextMenu.visible) {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+      }
+    };
+    window.addEventListener('click', hideContextMenu);
+    // Cleanup function: Remove the event listener when the component unmounts
+    // or before the effect re-runs.
+    return () => {
+      window.removeEventListener('click', hideContextMenu);
+    };
+  }, [contextMenu.visible]);
+
+  // rename nodes
+  const handleRename = () => {
+    const currentLabel = contextMenu.cell.attr('label/text');
+    const newLabel = prompt("Enter new label:", currentLabel);
+    if (newLabel !== null) {
+      contextMenu.cell.attr('label/text', newLabel);
+    }
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  };
+  // delete nodes and edges
+  const handleDelete = () => {
+    if (window.confirm("Delete this element?")) {
+      contextMenu.cell.remove();
+    }
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  };
+  
+  // Show ports on mouse hover and hide on mouse leave
+  useEffect(() => {
+    if (paperRef.current) {
+      // Show ports on mouse enter.
+      paperRef.current.on('cell:mouseenter', (cellView) => {
+        cellView.$('[magnet]').attr('opacity', 1);
+      });
+  
+      // Hide ports on mouse leave.
+      paperRef.current.on('cell:mouseleave', (cellView) => {
+        cellView.$('[magnet]').attr('opacity', 0);
+      });
+    }
+  }, []);
+
+
   return (
     <div className="jointjs-demo-container">
       <div className="jointjs-left-panel">
@@ -274,6 +393,36 @@ stop
 
       {/* The diagram container now has padding in CSS for spacing */}
       <div className="jointjs-diagram-container" ref={containerRef}>
+        {/* The diagram is rendered inside this container */}
+        {contextMenu.visible && (
+          <div 
+            className="custom-context-menu" 
+            style={{
+              position: 'absolute',
+              top: contextMenu.y,
+              left: contextMenu.x,
+              backgroundColor: '#fff',
+              border: '1px solid #ccc',
+              boxShadow: '2px 2px 5px rgba(0,0,0,0.2)',
+              zIndex: 1000,
+            }}
+          >
+            <ul style={{ listStyle: 'none', margin: 0, padding: '5px 0' }}>
+              <li 
+                onClick={handleRename} 
+                style={{ padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Rename
+              </li>
+              <li 
+                onClick={handleDelete} 
+                style={{ padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Delete
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
