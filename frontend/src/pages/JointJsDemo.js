@@ -376,7 +376,86 @@ stop
     }
   }, []);
 
+  function onDragStart(e, shapeType) {
+    // Store the shapeType in dataTransfer
+    e.dataTransfer.setData("shapeType", shapeType);
+  }
 
+  function handleDrop(e) {
+    e.preventDefault();
+  
+    // 1) Get the shapeType from dataTransfer
+    const shapeType = e.dataTransfer.getData("shapeType");
+    if (!shapeType) return;
+  
+    // Get the bounding rect of the actual paper element (not the container)
+    const paperEl = paperRef.current.el;
+    const paperRect = paperEl.getBoundingClientRect();
+
+    const dropX = e.clientX 
+    const dropY = e.clientY
+
+    // Convert DOM coords to local paper coordinates
+    const localPoint = paperRef.current.clientToLocalPoint({ x: dropX, y: dropY });
+    const x = localPoint.x;
+    const y = localPoint.y;
+  
+    // 4) Create a new shape based on shapeType
+    let shape;
+    switch (shapeType) {
+      case "rectangle":
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.attr({
+          body: { rx: 10, ry: 10, fill: "#ffffff", stroke: "#333", strokeWidth: 2 },
+          label: { text: "Rectangle", fill: "#333", fontSize: 14 }
+        });
+        break;
+      case "group":
+        // For partition nodes
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.attr({
+          body: { rx: 10, ry: 10, fill: "#56c1ff", stroke: "#333", strokeWidth: 2 },
+          label: { text: "Partition", fill: "#333", fontSize: 14 }
+        });
+        break;
+      case "fork":
+        shape = new joint.shapes.standard.Rectangle();
+        shape.resize(160, 60);
+        shape.attr({
+          body: { rx: 10, ry: 10, fill: "#f0f0f0", stroke: "#333", strokeWidth: 2 },
+          label: { text: "Fork", fill: "#333", fontSize: 14 }
+        });
+        break;
+      case "circle":
+        shape = new joint.shapes.standard.Circle();
+        shape.resize(60, 60);
+        shape.attr({
+          body: { fill: "#1bed88", stroke: "#333", strokeWidth: 2 },
+          label: { text: "Circle", fill: "#333", fontSize: 14 }
+        });
+        break;
+      case "diamond":
+        shape = new joint.shapes.standard.Polygon();
+        shape.resize(100, 100);
+        shape.attr({
+          body: { refPoints: "50,0 100,50 50,100 0,50", fill: "#ffd54f", stroke: "#333", strokeWidth: 2 },
+          label: { text: "Diamond", fill: "#333", fontSize: 14 }
+        });
+        break;
+      default:
+        return;
+    }
+  
+    // 5) Position the shape at the drop coordinates
+    shape.position(x, y);
+    // 6) Add interactive ports (handle points) so that the new shape behaves like others
+    addInteractivePorts(shape);
+    // 7) Finally, add the shape to the graph
+    shape.addTo(graphRef.current);
+  }
+  
   return (
     <div className="jointjs-demo-container">
       <div className="jointjs-left-panel">
@@ -406,7 +485,11 @@ stop
       </div>
 
       {/* The diagram container now has padding in CSS for spacing */}
-      <div className="jointjs-diagram-container" ref={containerRef}>
+      <div className="jointjs-diagram-container" 
+           ref={containerRef}
+           onDragOver={(e) => e.preventDefault()}  // needed to allow dropping of shapes
+           onDrop={handleDrop}  
+      >
         {/* The diagram is rendered inside this container */}
         {contextMenu.visible && (
           <div 
@@ -437,6 +520,26 @@ stop
             </ul>
           </div>
         )}
+      </div>
+
+      {/* right-side panel for the drag and drop palette */}
+      <div className="jointjs-palette">
+        <h4>Shape Palette</h4>
+        <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "rectangle")}>
+          Rectangle
+        </div>
+        <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "group")}>
+          Partition
+        </div>
+        <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "fork")}>
+          Fork
+        </div>
+        <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "circle")}>
+          Circle
+        </div>
+        <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "diamond")}>
+          Diamond
+        </div>
       </div>
     </div>
   );
