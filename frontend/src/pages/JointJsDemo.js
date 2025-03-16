@@ -77,6 +77,22 @@ stop
       drawGrid: true,
       restrictTranslate: true,
       background: { color: "#ffffff" },
+
+      // Make newly-dragged links match thedashed arrow style
+      defaultLink: new joint.shapes.standard.Link({
+        attrs: {
+          line: { strokeWidth: 2, stroke: "#888", strokeDasharray: "5 5",
+            targetMarker: { type: "path", d: "M 10 -5 0 0 10 5 z", fill: "#888",
+            },
+          },
+        },
+      }),
+      
+      // Remove the fancy link tools (the cross and arrow icons on hover)
+      interactive: {
+        linkMove: false, // Disables the default link editing tools
+      },
+      linkPinning: false, // Disables the default behaivior where a link can be dragged to an empty area
     });
   }, []);
 
@@ -341,9 +357,7 @@ stop
   };
   // delete nodes and edges
   const handleDelete = () => {
-    if (window.confirm("Delete this element?")) {
-      contextMenu.cell.remove();
-    }
+    contextMenu.cell.remove();
     setContextMenu(prev => ({ ...prev, visible: false }));
   };
   
