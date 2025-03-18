@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as joint from "jointjs";
 import "../styles/JointJsDemo.css";
 import parsePlantUML from "../parsing/parseActivityDiagrams";
+import reverseParsePlantUML from "../reverse-parsing/getActivityDiagramCodes";
 
 export default function JointjsDemo() {
   const FIXED_WIDTH = 700;    // Fixed paper width
@@ -22,6 +23,9 @@ stop
   const containerRef = useRef(null);
   const graphRef = useRef(null);
   const paperRef = useRef(null);
+
+  // State to hold the updated PlantUML code from the diagram
+  const [updatedUml, setUpdatedUml] = useState("");
 
   function addInteractivePorts(shape) {
     // 1) Add ports (four sides). We can tweak the sides/IDs as needed.
@@ -307,7 +311,7 @@ stop
     }
   }, [zoom]);
 
-  // Addj g a cotext menu for right-click actions
+  // Adding a cotext menu for right-click actions
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
@@ -455,6 +459,12 @@ stop
     // 7) Finally, add the shape to the graph
     shape.addTo(graphRef.current);
   }
+
+  // Handler to generate updated PlantUML from the current diagram.
+  function handleGenerateUml() {
+    const uml = reverseParsePlantUML(graphRef.current);
+    setUpdatedUml(uml);
+  }
   
   return (
     <div className="jointjs-demo-container">
@@ -539,6 +549,16 @@ stop
         </div>
         <div className="palette-item" draggable onDragStart={(e) => onDragStart(e, "diamond")}>
           Diamond
+        </div>
+
+        <div className="uml-output">
+          <h4>Updated PlantUML Code</h4>
+          <textarea 
+            value={updatedUml}
+            readOnly
+            placeholder="Generated PlantUML code will appear here..."
+          />
+          <button onClick={handleGenerateUml}>Generate UML Code</button>
         </div>
       </div>
     </div>
