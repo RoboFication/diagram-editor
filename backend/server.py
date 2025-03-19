@@ -8,7 +8,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["http://localhost:3000"] for stricter security
+    allow_origins=["*"],  # or ["http://localhost:3000"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -83,7 +83,7 @@ def save(uml_body: UMLBody):
         print("Java spawn error (save):", e)
         return Response(content="Java spawn error (save)", status_code=500)
 
-    default_png = os.path.join(SAVE_DIR, "diagram.png")
+    default_png = os.path.join(SAVE_DIR, 'diagram.png')
     if os.path.exists(default_png):
         os.rename(default_png, png_file)
 
