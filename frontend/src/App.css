@@ -1,0 +1,50 @@
+/* App.css */
+
+/* Container around the entire app */
+.app-container {
+    margin: 20px;
+    font-family: sans-serif;
+  }
+  
+  /* Title or heading */
+  .app-container h1 {
+    margin-bottom: 1rem;
+  }
+  
+  /* Left-hand stencil area */
+  .stencil-container {
+    float: left;
+    border: 1px solid #ccc;
+    width: 200px;
+    height: 600px;
+    box-sizing: border-box;
+    margin-right: 1rem; /* small gap to the paper */
+  }
+  
+  /* Main paper area */
+  .paper-container {
+    float: left;
+    border: 1px solid #000;
+    width: 1000px;
+    height: 600px;
+    box-sizing: border-box;
+  }
+  
+  /* Clear float after stencil + paper */
+  .clearfix {
+    clear: both;
+    margin-top: 20px;
+  }
+  
+  /* The "Load UML" / "Save Diagram" buttons, etc. are normal elements. 
+     If you want them styled, you can add custom CSS here.
+  */
+  .paper-container {
+    float: left;
+    border: 1px solid #000;
+    width: 1000px;  /* or 100% for flexible layout */
+    height: 600px;
+    overflow: auto; /* let scrollbars appear if needed */
+    position: relative; /* helps with transformations */
+  }
+  

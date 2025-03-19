@@ -1,5 +1,10 @@
 @startuml
-rectangle A1
-rectangle A2
-A2 --> A1
+class Car <<block>> {
+  horsepower=100
+  color=red
+}
+class Engine <<block>> {
+  type=V8
+}
+Car --* Engine : <<composition>>
 @enduml

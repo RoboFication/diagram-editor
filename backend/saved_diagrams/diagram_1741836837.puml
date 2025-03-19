@@ -1,0 +1,14 @@
+@startuml
+class Car <<block>> {
+  horsepower=100
+  color=red
+}
+class Bike <<block>> {
+  horsepower=50
+}
+class Engine <<block>> {
+  type=V8
+}
+Car --* Engine : <<composition>>
+Bike -- Car : <<association>>
+@enduml
