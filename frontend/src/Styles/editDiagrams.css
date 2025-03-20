@@ -1,0 +1,26 @@
+.diagram-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.diagram-indicator {
+  color: #007bff;
+  font-weight: 500;
+  font-size: 14px;
+}
+.diagram-selector {
+  padding: 8px 12px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  min-width: 200px;
+}
+
+.diagram-selector:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}

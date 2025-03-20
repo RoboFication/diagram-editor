@@ -5,10 +5,5 @@ class <<block>> <<block>> {
 class <<block>> <<block>> {
   - attr=val
 }
-class <<block>> <<block>> {
-  - attr=val
-}
-class <<block>> <<block>> {
-  - attr=val
-}
+<<block>> -- <<block>> : <<association>>
 @enduml
