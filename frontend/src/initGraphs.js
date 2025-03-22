@@ -1,10 +1,15 @@
 // initGraphs.js
 import * as joint from 'jointjs';
-import { createCompositionLink, createAssociationLink, createCustomBlock } from './bddShapes';
+import { createUmlLink, createCustomBlock } from './bddShapes';
 import { initializeZoomPan } from './zoomPan';
+
 /**
- * Initializes the main Paper, the stencil Paper, and sets up all interactions,
- * including manual resizing via a custom "handle" circle in the block shape.
+ * Initializes the main Paper, the stencil Paper, and sets up:
+ *  - Zoom/pan
+ *  - Resizable block
+ *  - 4 link types in stencil
+ *  - Double-click on block => multiline edit
+ *  - Double-click on link => single prompt to edit center, sourceCard, targetCard
  */
 export function initializeGraphs({
   stencilRef,
@@ -36,17 +41,15 @@ export function initializeGraphs({
       }
     },
 
-    // Only connect link endpoints to shapes with magnet="true"
     validateMagnet: (cellView, magnet) => {
       return magnet && magnet.getAttribute('magnet') === 'true';
     },
-    // If user tries to connect to blank or a shape with no magnet => false
     validateConnection: (sourceView, sourceMagnet, targetView, targetMagnet) => {
       if (!targetView || !targetMagnet) return false;
-      if (targetMagnet.getAttribute('magnet') !== 'true') return false;
-      return true;
+      return targetMagnet.getAttribute('magnet') === 'true';
     }
   });
+  // Zoom/pan
   initializeZoomPan({
     paper,
     container: paperRef.current,
@@ -70,21 +73,31 @@ export function initializeGraphs({
   });
 
   // 5) Populate the stencil
-  // (a) Our custom block with a built-in resize handle
+
+  // a) Custom block
   const customBlock = createCustomBlock();
   customBlock.position(20, 20);
   stencilGraph.addCell(customBlock);
 
-  // (b) Composition link
-  const compLink = createCompositionLink();
-  compLink.source({ x: 40, y: 150 });
-  compLink.target({ x: 160, y: 150 });
+  // b) Four link types
+  const compLink = createUmlLink('composition');
+  compLink.source({ x: 20, y: 150 });
+  compLink.target({ x: 180, y: 150 });
   stencilGraph.addCell(compLink);
 
-  // (c) Association link
-  const assocLink = createAssociationLink();
-  assocLink.source({ x: 40, y: 250 });
-  assocLink.target({ x: 160, y: 250 });
+  const aggLink = createUmlLink('aggregation');
+  aggLink.source({ x: 20, y: 200 });
+  aggLink.target({ x: 180, y: 200 });
+  stencilGraph.addCell(aggLink);
+
+  const genLink = createUmlLink('generalization');
+  genLink.source({ x: 20, y: 250 });
+  genLink.target({ x: 180, y: 250 });
+  stencilGraph.addCell(genLink);
+
+  const assocLink = createUmlLink('association');
+  assocLink.source({ x: 20, y: 300 });
+  assocLink.target({ x: 180, y: 300 });
   stencilGraph.addCell(assocLink);
 
   // 6) Drag-and-drop from stencil => main paper
@@ -92,7 +105,7 @@ export function initializeGraphs({
 
   stencilPaper.on('cell:pointerdown', (cellView) => {
     currentElement = cellView.model.clone();
-    // Make sure it's interactive once placed in main paper
+    // make it interactive once placed on main paper
     currentElement.unset('interactive');
   });
 
@@ -104,7 +117,7 @@ export function initializeGraphs({
     const y = evt.clientY - paperRect.top;
 
     if (currentElement.isLink()) {
-      // Optional: auto-connect if there's a shape under pointer
+      // optional auto-connect
       const localPoint = paper.clientToLocalPoint({ x: evt.clientX, y: evt.clientY });
       const targetViews = paper.findViewsFromPoint(localPoint);
       if (targetViews.length) {
@@ -116,41 +129,35 @@ export function initializeGraphs({
       }
       mainGraph.addCell(currentElement);
     } else {
-      // It's a custom block
       currentElement.position(x, y);
       mainGraph.addCell(currentElement);
     }
-
     currentElement = null;
   });
 
-  // 7) Double-click => open multiline editor
+  // 7) Double-click element => multiline editor
   paper.on('element:pointerdblclick', (elementView) => {
     if (onElementDblClick) {
       onElementDblClick(elementView.model);
     }
   });
 
-  // 8) Single-click an element => boundary box + remove button
+  // 8) Single-click block => boundary box + remove
   paper.on('element:pointerclick', (elementView) => {
     const tools = new joint.dia.ToolsView({
       tools: [
         new joint.elementTools.Boundary({ padding: 5 }),
-        new joint.elementTools.Remove({
-          offset: 20,
-          distance: 30
-        })
+        new joint.elementTools.Remove({ offset: 20, distance: 30 })
       ]
     });
     elementView.addTools(tools);
   });
 
   paper.on('element:mouseleave', (elementView) => {
-    // Hide the boundary/remove tools upon exit
     elementView.removeTools();
   });
 
-  // 9) link:pointerclick => arrowheads + remove, etc.
+  // 9) Single-click link => arrowheads, remove, etc.
   paper.on('link:pointerclick', (linkView) => {
     const tools = new joint.dia.ToolsView({
       tools: [
@@ -163,24 +170,48 @@ export function initializeGraphs({
     linkView.addTools(tools);
   });
 
-  // 10) Manual "resize handle" approach using document-level events
+  // 10) Double-click on the link => single prompt for center, sourceCard, targetCard
+  paper.on('cell:pointerdblclick', (cellView, evt) => {
+    // if it's an element, we already handled above. So let's check if it's a link
+    const model = cellView.model;
+    if (model.isLink()) {
+      // read existing label values
+      const lbl0 = model.label(0)?.attrs?.text?.text || '';
+      const lbl1 = model.label(1)?.attrs?.text?.text || '';
+      const lbl2 = model.label(2)?.attrs?.text?.text || '';
+      const oldVal = `${lbl0};${lbl1};${lbl2}`;
+
+      const promptStr =
+        'Edit link labels (semicolon separated):\n' +
+        'center; sourceCard; targetCard';
+
+      const newVal = prompt(promptStr, oldVal);
+      if (newVal !== null) {
+        const parts = newVal.split(';');
+        const newLbl0 = (parts[0] || '').trim();
+        const newLbl1 = (parts[1] || '').trim();
+        const newLbl2 = (parts[2] || '').trim();
+        model.label(0, { attrs: { text: { text: newLbl0 } } });
+        model.label(1, { attrs: { text: { text: newLbl1 } } });
+        model.label(2, { attrs: { text: { text: newLbl2 } } });
+      }
+    }
+  });
+
+  // 11) Resizing by circle handle
   let resizingData = null;
 
   paper.on('element:pointerdown', (elementView, evt, x, y) => {
-    // Check if the user clicked the circle with selector="resizeHandle"
     const target = evt.target;
     if (!target) return;
 
-    // JointJS adds a "joint-selector" attribute with the selector name:
     const selector = target.getAttribute('joint-selector') || '';
     if (selector === 'resizeHandle') {
-      // Stop normal "move the element" behavior
       evt.stopPropagation();
       evt.preventDefault();
 
       const model = elementView.model;
       const initialSize = model.size();
-      // We want the original pointer location in local coordinates
       const local = paper.clientToLocalPoint({ x: evt.clientX, y: evt.clientY });
 
       resizingData = {
@@ -190,20 +221,17 @@ export function initializeGraphs({
         startY: local.y
       };
 
-      // Attach doc-level mousemove + mouseup
       const onMove = (evt2) => {
         const p = paper.clientToLocalPoint({ x: evt2.clientX, y: evt2.clientY });
         const dx = p.x - resizingData.startX;
         const dy = p.y - resizingData.startY;
 
-        let newWidth = resizingData.initialSize.width + dx;
-        let newHeight = resizingData.initialSize.height + dy;
+        let newW = resizingData.initialSize.width + dx;
+        let newH = resizingData.initialSize.height + dy;
+        newW = Math.max(20, newW);
+        newH = Math.max(20, newH);
 
-        // clamp
-        newWidth = Math.max(20, newWidth);
-        newHeight = Math.max(20, newHeight);
-
-        resizingData.model.resize(newWidth, newHeight);
+        resizingData.model.resize(newW, newH);
       };
 
       const onUp = () => {

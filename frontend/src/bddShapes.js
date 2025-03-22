@@ -1,9 +1,11 @@
 // bddShapes.js
 import * as joint from 'jointjs';
 
-// 1) Block
-
-export function createCustomBlock(initialLabel = '<<block>>\n- attr=val') {
+/**
+ * Creates a SysML/Block-like rectangular shape
+ * that can have lines like "+speed: float" in the text.
+ */
+export function createCustomBlock(initialLabel = 'Block\n<<block>>\nattr:Type') {
   return new joint.dia.Element({
     type: 'myapp.CustomBlock',
     size: { width: 160, height: 80 },
@@ -13,26 +15,22 @@ export function createCustomBlock(initialLabel = '<<block>>\n- attr=val') {
         stroke: '#000000',
         strokeWidth: 1,
         magnet: true,
-        // Tie the rect to the element's current .size()
         refWidth: '100%',
         refHeight: '100%'
       },
       label: {
         text: initialLabel,
         fill: 'black',
-        // Center the text
         refX: '50%',
         refY: '50%',
         textAnchor: 'middle',
         yAlignment: 'middle'
       },
+      // The manual resize circle
       resizeHandle: {
-        // Pin to bottom-right corner of the "body"
         ref: 'body',
         refX: '0%',
         refY: '0%',
-        // Shift left/up by ~the circle's radius so it appears
-        // snugly at that corner
         refDx: 0,
         refDy: 0,
         r: 4,
@@ -48,66 +46,95 @@ export function createCustomBlock(initialLabel = '<<block>>\n- attr=val') {
   });
 }
 
-
-// 2) Composition link
-export function createCompositionLink() {
+/**
+ * Creates a dynamic UML link with 3 labels:
+ *   - label(0) = center text (e.g. "composed of" / "association" / etc.)
+ *   - label(1) = source cardinality
+ *   - label(2) = target cardinality
+ *
+ * `linkType` sets the arrow marker:
+ *   "composition" => black diamond on source
+ *   "aggregation" => white diamond on source
+ *   "generalization" => triangle arrow on target
+ *   "association" => no special arrow
+ */
+export function createUmlLink(linkType = 'association') {
   const link = new joint.shapes.standard.Link();
-  // Start out bigger in the stencil (source->target ~80px wide)
-  link.source({ x: 20, y: 140 });
-  link.target({ x: 200, y: 140 });
 
+  // Common line style
   link.attr({
     line: {
       stroke: '#333',
-      sourceMarker: {
-        type: 'path',
-        d: 'M 10 0 0 -6 -10 0 0 6 z', // diamond
-        fill: 'black'
-      }
+      // pointerEvents: 'none' => not strictly needed here since we will do 
+      // a single double-click on the link approach. But you can set to 'none'
+      // if you want the line to pass pointer events through.
     }
   });
 
-  // Fixed label in the middle
+  // Markers depending on link type
+  switch (linkType) {
+    case 'composition':
+      link.attr({
+        line: {
+          sourceMarker: {
+            type: 'path',
+            d: 'M 10 0 0 -6 -10 0 0 6 z', // filled diamond
+            fill: 'black'
+          }
+        }
+      });
+      break;
+    case 'aggregation':
+      link.attr({
+        line: {
+          sourceMarker: {
+            type: 'path',
+            d: 'M 10 0 0 -6 -10 0 0 6 z', // diamond
+            fill: 'white'
+          }
+        }
+      });
+      break;
+    case 'generalization':
+      link.attr({
+        line: {
+          targetMarker: {
+            type: 'path',
+            d: 'M 10 -6 0 0 10 6 z', // triangle
+            fill: 'black'
+          }
+        }
+      });
+      break;
+    default:
+      // association => no special marker
+      break;
+  }
+
+  // label(0) => center text
   link.appendLabel({
     position: 0.5,
     attrs: {
-      text: {
-        text: '<<compos>>',
-        fill: 'black',
-        // Prevent label dragging
-        pointerEvents: 'none'
-      },
-      body: {
-        pointerEvents: 'none'
-      }
-    }
-  });
-  return link; // type="standard.Link"
-}
-
-// 3) Association link
-export function createAssociationLink() {
-  const link = new joint.shapes.standard.Link();
-  link.source({ x: 20, y: 200 });
-  link.target({ x: 200, y: 200 });
-
-  link.attr({
-    line: {
-      stroke: '#333'
+      text: { text: linkType, fill: 'black' },
+      body: { pointerEvents: 'none' }
     }
   });
 
+  // label(1) => source cardinality
   link.appendLabel({
-    position: 0.5,
+    position: 0.2,
     attrs: {
-      text: {
-        text: '<<assoc>>',
-        fill: 'black',
-        pointerEvents: 'none'
-      },
-      body: {
-        pointerEvents: 'none'
-      }
+      text: { text: ' ' },
+      body: { pointerEvents: 'none' }
+    }
+  });
+
+  // label(2) => target cardinality
+  link.appendLabel({
+    position: 0.8,
+    attrs: {
+      text: { text: ' ' },
+      body: { pointerEvents: 'none' }
     }
   });
 

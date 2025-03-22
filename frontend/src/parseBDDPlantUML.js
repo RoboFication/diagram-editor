@@ -1,17 +1,35 @@
 // parseBDDPlantUML.js
 import * as joint from 'jointjs';
-import { createCustomBlock } from './bddShapes';
+import { createCustomBlock, createUmlLink } from './bddShapes';
 
 const commentRegex = /^'/;
 const classLineRegex = /^class\s+("?[\w\d_]+"?)\s+<<(\w+)>>\s*(\{)?/i;
-const relRegex = /^(\S+)\s+([\-o\*]+)\s+(\S+)\s*:\s*<<(\w+)>>/i;
+
+// Relationship line example:
+// Bike "1" *-- "1" Car : composition
+// Car "*" o-- "1" House : aggregation
+// We define a regex with optional cardinalities in quotes, arrow [*o]?--\|> and optional label after colon
+const relRegex = new RegExp([
+  '^',
+  '(\\S+)',                      // (1) sourceName
+  '\\s*(?:"([^"]*)")?\\s*',      // (2) optional sourceCard in quotes
+  '([*o]?--(?:\\|>)?)',          // (3) arrow: optional * or o, then --, then optionally |>
+  '\\s*(?:"([^"]*)")?\\s*',      // (4) optional targetCard in quotes
+  '(\\S+)',                      // (5) targetName
+  '\\s*(?::\\s*(.+))?',          // (6) optional label after colon
+  '$'
+].join(''));
 
 export function parseBDDPlantUML(umlText) {
+  console.log('=== parseBDDPlantUML DEBUG ===');
+  console.log('UML input:\n', umlText);
+
   let lines = umlText
     .replace(/@startuml/g, '')
     .replace(/@enduml/g, '')
     .split('\n')
-    .map(l => l.trim());
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
 
   const nodes = [];
   const links = [];
@@ -19,26 +37,28 @@ export function parseBDDPlantUML(umlText) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (!line) {
-      i++;
-      continue;
-    }
+    console.log(`Line[${i}]: "${line}"`);
+
+    // skip comments
     if (commentRegex.test(line)) {
+      console.log(' -> This line is a comment, skipping');
       i++;
       continue;
     }
 
+    // 1) Class line
     let mc = line.match(classLineRegex);
     if (mc) {
+      console.log(' -> Matched CLASS line =>', mc);
       const rawName = mc[1].replace(/"/g, '');
-      const stereo = mc[2];
-      const hasOpenBrace = !!mc[3];
+      const stereo = mc[2].toLowerCase();
+      let hasOpenBrace = !!mc[3];
       let attributes = [];
 
       i++;
       if (hasOpenBrace) {
         while (i < lines.length && !lines[i].startsWith('}')) {
-          if (lines[i] && !commentRegex.test(lines[i])) {
+          if (!commentRegex.test(lines[i]) && lines[i]) {
             attributes.push(lines[i]);
           }
           i++;
@@ -48,97 +68,125 @@ export function parseBDDPlantUML(umlText) {
         }
       }
 
+      console.log(` -> Creating node: name="${rawName}", stereo="${stereo}", attrs=`, attributes);
+
       nodes.push({
         name: rawName,
-        stereotype: stereo.toLowerCase(),
+        stereotype: stereo,
         attributes
       });
       continue;
     }
 
+    // 2) Relationship line
     let mr = line.match(relRegex);
     if (mr) {
-      const source = mr[1];
-      const arrow = mr[2];
-      const target = mr[3];
-      let labelStereo = mr[4].toLowerCase();
+      console.log(' -> Matched REL line =>', mr);
+      const sourceName = mr[1];
+      const sourceCard = mr[2] || '';
+      const arrow = mr[3];  // e.g. "*--", "o--", "--|>", or "--"
+      const targetCard = mr[4] || '';
+      const targetName = mr[5];
+      const userLabel = mr[6] || ''; // after colon
 
-      // unify composition vs. association
-      let relStereotype = (arrow.includes('*') || labelStereo.includes('compos'))
-        ? 'composition'
-        : 'association';
+      // interpret linkType
+      let linkType = 'association';
+      if (arrow.includes('*--')) linkType = 'composition';
+      else if (arrow.includes('o--')) linkType = 'aggregation';
+      else if (arrow.includes('--|>')) linkType = 'generalization';
 
-      links.push({ source, target, arrow, relStereotype });
+      console.log(
+        ` -> Relationship parsed => source="${sourceName}" [${sourceCard}], arrow="${arrow}", target="${targetName}" [${targetCard}], label="${userLabel}", linkType="${linkType}"`
+      );
+
+      links.push({
+        sourceName,
+        sourceCard,
+        targetName,
+        targetCard,
+        linkType,
+        userLabel
+      });
+
       i++;
       continue;
     }
 
+    // If we get here, it didn't match class or rel
+    console.log(' -> No match (ignoring line)');
     i++;
   }
+
+  console.log('=== parseBDDPlantUML results ===');
+  console.log('Nodes:', nodes);
+  console.log('Links:', links);
 
   return { nodes, links };
 }
 
 export function buildJointJSFromBDD(umlText, graph) {
+  console.log('=== buildJointJSFromBDD DEBUG ===');
   const { nodes, links } = parseBDDPlantUML(umlText);
+
   graph.clear();
 
+  console.log(' -> Creating shapes for nodes...');
   const nodeMap = {};
 
-  nodes.forEach(n => {
-    // Build the text lines for the shape label
-    // e.g. ["Car", "<<block>>", "horsepower=100", "color=red"]
+  // create shapes
+  nodes.forEach((n, idx) => {
+    console.log(`  Node[${idx}]:`, n);
     const labelLines = [n.name, `<<${n.stereotype}>>`, ...n.attributes];
     const labelText = labelLines.join('\n');
 
-    let element;
-
+    let shape;
     if (n.stereotype === 'block') {
-      // CREATE A CUSTOM BLOCK (with the circle handle)
-      element = createCustomBlock(labelText);
+      shape = createCustomBlock(labelText);
     } else {
-      // For any other stereotype, create a basic standard rectangle
-      element = new joint.shapes.standard.Rectangle();
-      element.resize(180, 90);
-      element.attr({
+      shape = new joint.shapes.standard.Rectangle();
+      shape.resize(180, 90);
+      shape.attr({
         label: { text: labelText, fill: 'black' },
-        body: { fill: '#FFFFFF', magnet: true }
+        body: { fill: '#fff', magnet: true }
       });
     }
+    shape.position(Math.random() * 200, Math.random() * 200);
 
-    // Random position so they don’t all overlap
-    element.position(Math.random() * 200, Math.random() * 200);
-    graph.addCell(element);
-    nodeMap[n.name] = element;
+    nodeMap[n.name] = shape;
+    graph.addCell(shape);
   });
 
-  links.forEach(l => {
-    const src = nodeMap[l.source];
-    const tgt = nodeMap[l.target];
-    if (!src || !tgt) return;
+  console.log(' -> nodeMap keys =', Object.keys(nodeMap));
 
-    const link = new joint.shapes.standard.Link();
-    if (l.relStereotype === 'composition') {
-      link.attr({
-        line: {
-          sourceMarker: {
-            type: 'path',
-            d: 'M 10 0 0 -6 -10 0 0 6 z',
-            fill: 'black'
-          }
-        }
-      });
+  // create links
+  console.log(' -> Creating links for relationships...');
+  links.forEach((l, idx) => {
+    console.log(`  Link[${idx}]:`, l);
+    const src = nodeMap[l.sourceName];
+    const tgt = nodeMap[l.targetName];
+    if (!src) {
+      console.log(`   -> SKIPPING link, source nodeMap["${l.sourceName}"] is missing`);
+      return;
     }
+    if (!tgt) {
+      console.log(`   -> SKIPPING link, target nodeMap["${l.targetName}"] is missing`);
+      return;
+    }
+
+    const link = createUmlLink(l.linkType);
+
+    // label(0) => user label
+    link.label(0, { attrs: { text: { text: l.userLabel } } });
+    // label(1) => sourceCard
+    link.label(1, { attrs: { text: { text: l.sourceCard } } });
+    // label(2) => targetCard
+    link.label(2, { attrs: { text: { text: l.targetCard } } });
+
     link.source(src);
     link.target(tgt);
-
-    link.appendLabel({
-      position: 0.5,
-      attrs: {
-        text: { text: `<<${l.relStereotype}>>` }
-      }
-    });
-
+    console.log(`   -> Created link from "${l.sourceName}" to "${l.targetName}" with type="${l.linkType}"`);
     graph.addCell(link);
   });
+
+  console.log('=== Done building JointJS graph ===');
 }

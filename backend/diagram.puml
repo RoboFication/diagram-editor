@@ -1,10 +1,15 @@
 @startuml
-class Car <<block>> {
-  horsepower=100
-  color=red
+class "Vehicle" <<block>> {
+  +weight: float
+  +speed: float
 }
-class Engine <<block>> {
-  type=V8
+class "Bike" <<block>> {
+  attr:Type
 }
-Car --* Engine : <<composition>>
+class "Car" <<block>> {
+  +brand: String
+  +model: String
+}
+Bike *-- Car : composition
+Car --|> Vehicle : Generalization
 @enduml

@@ -18,15 +18,21 @@ function App() {
 
   const [umlText, setUmlText] = useState('');
   const [loadText, setLoadText] = useState(`@startuml
-class Car <<block>> {
-  horsepower=100
-  color=red
+class "Vehicle" <<block>> {
+  +weight: float
+  +speed: float
 }
-class Engine <<block>> {
-  type=V8
+
+class "Car" <<block>> {
+  +brand: String
+  +model: String
 }
-Car --* Engine : <<composition>>
+
+Car --|> Vehicle : Generalization
+Car *-- "1" Engine : composed of
+Car o-- "1..*" ElectricEngine : alternative propulsion
 @enduml
+
 `);
   const [pngUrl, setPngUrl] = useState('');
 
